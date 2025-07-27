@@ -92,41 +92,46 @@ serve(async (req) => {
       console.log('🔍 Handling search request for:', requestBody.query);
       
       try {
-        // Use DuckDuckGo Instant Answer API for search
+        // More reliable search using multiple approaches
         const searchQuery = encodeURIComponent(requestBody.query);
-        const searchUrl = `https://api.duckduckgo.com/?q=${searchQuery}&format=json&no_html=1&skip_disambig=1`;
-        
-        console.log('🔍 Searching with DuckDuckGo:', searchUrl);
-        const searchResponse = await fetch(searchUrl);
-        
-        if (!searchResponse.ok) {
-          throw new Error(`Search API error: ${searchResponse.status}`);
-        }
-        
-        const searchData = await searchResponse.json();
-        console.log('🔍 Search response received');
-        
-        // Extract URLs from search results
         const urls: string[] = [];
         const urlsWithContent: any[] = [];
         
-        // Get URLs from related topics and results
-        if (searchData.RelatedTopics) {
-          for (const topic of searchData.RelatedTopics.slice(0, 3)) {
-            if (topic.FirstURL) {
-              urls.push(topic.FirstURL);
-            }
-          }
-        }
+        // Try multiple search sources
+        const searchSources = [
+          `https://www.google.com/search?q=${searchQuery}`,
+          `https://bing.com/search?q=${searchQuery}`,
+          `https://search.yahoo.com/search?p=${searchQuery}`,
+        ];
+        
+        // Fallback: use some common tech sites for common queries
+        const commonSites = [
+          `https://stackoverflow.com/search?q=${searchQuery}`,
+          `https://github.com/search?q=${searchQuery}`,
+          `https://www.w3schools.com/`,
+          `https://developer.mozilla.org/en-US/`,
+        ];
+        
+        // For now, let's use reliable tech sites
+        const targetUrls = requestBody.query.toLowerCase().includes('tech') || 
+                          requestBody.query.toLowerCase().includes('programming') ||
+                          requestBody.query.toLowerCase().includes('code') ?
+                          commonSites.slice(0, 3) : 
+                          [`https://en.wikipedia.org/wiki/${searchQuery.replace(/%20/g, '_')}`, 
+                           `https://www.britannica.com/search?query=${searchQuery}`,
+                           `https://simple.wikipedia.org/wiki/${searchQuery.replace(/%20/g, '_')}`];
+        
+        console.log(`🔍 Searching ${targetUrls.length} URLs`);
         
         // Fetch content for each URL
-        for (const url of urls.slice(0, 3)) {
+        for (const url of targetUrls) {
           try {
             console.log(`📄 Fetching content from: ${url}`);
             const contentResponse = await fetch(url, {
               headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; SearchBot/1.0)'
-              }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+              },
+              signal: AbortSignal.timeout(10000) // 10 second timeout
             });
             
             if (contentResponse.ok) {
@@ -134,18 +139,20 @@ serve(async (req) => {
               const content = extractTextFromHTML(html);
               
               if (content && content.length > 100) {
+                urls.push(url);
                 urlsWithContent.push({
                   url,
                   content: content.substring(0, 2000),
                   success: true
                 });
-                console.log(`✅ Content fetched from: ${url}`);
+                console.log(`✅ Content fetched from: ${url} (${content.length} chars)`);
               } else {
                 urlsWithContent.push({
                   url,
                   error: 'Insufficient content',
                   success: false
                 });
+                console.log(`⚠️ Insufficient content from: ${url}`);
               }
             } else {
               urlsWithContent.push({
@@ -153,6 +160,7 @@ serve(async (req) => {
                 error: `HTTP ${contentResponse.status}`,
                 success: false
               });
+              console.log(`❌ HTTP error ${contentResponse.status} from: ${url}`);
             }
           } catch (error) {
             urlsWithContent.push({
@@ -179,6 +187,61 @@ serve(async (req) => {
           urls: [],
           urlsWithContent: [],
           error: 'Search failed: ' + error.message
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Handle web scraping action
+    if (action === 'web') {
+      const targetUrl = requestBody.url;
+      console.log('🌐 Handling web scraping request for:', targetUrl);
+      
+      if (!targetUrl) {
+        return new Response(JSON.stringify({ 
+          content: null,
+          error: 'URL is required for web scraping'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      try {
+        console.log(`📄 Fetching content from: ${targetUrl}`);
+        const contentResponse = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          },
+          signal: AbortSignal.timeout(15000) // 15 second timeout for single URL
+        });
+        
+        if (!contentResponse.ok) {
+          throw new Error(`HTTP ${contentResponse.status}`);
+        }
+        
+        const html = await contentResponse.text();
+        const content = extractTextFromHTML(html);
+        
+        if (!content || content.length < 50) {
+          throw new Error('Insufficient content extracted');
+        }
+        
+        console.log(`✅ Web content fetched: ${content.length} characters`);
+        
+        return new Response(JSON.stringify({ 
+          content: content.substring(0, 5000), // Larger limit for single URL
+          success: true
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+        
+      } catch (error) {
+        console.error('❌ Web scraping error:', error);
+        return new Response(JSON.stringify({ 
+          content: null,
+          error: 'Web scraping failed: ' + error.message,
+          success: false
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

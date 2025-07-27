@@ -151,6 +151,16 @@ export const ChatInput = ({ onSendMessage, onToolUse, onStopGeneration, disabled
             disabled={disabled}
             className="flex-1 min-h-[20px] max-h-32 resize-none border-0 bg-transparent p-0 text-foreground placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
             rows={1}
+            style={{
+              height: 'auto',
+              minHeight: '20px',
+              maxHeight: '128px'
+            }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+            }}
           />
 
           <div className="flex items-center gap-2 flex-shrink-0">
