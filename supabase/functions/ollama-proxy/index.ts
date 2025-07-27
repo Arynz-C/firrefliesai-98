@@ -92,46 +92,55 @@ serve(async (req) => {
       console.log('🔍 Handling search request for:', requestBody.query);
       
       try {
-        // More reliable search using multiple approaches
-        const searchQuery = encodeURIComponent(requestBody.query);
+        // Fungsi untuk mencari di DuckDuckGo
+        const searchQuery = requestBody.query;
+        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`;
+        
+        console.log(`🔍 Searching DuckDuckGo: ${searchUrl}`);
+        
+        const searchResponse = await fetch(searchUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout(10000)
+        });
+        
+        if (!searchResponse.ok) {
+          throw new Error(`DuckDuckGo search failed: ${searchResponse.status}`);
+        }
+        
+        const html = await searchResponse.text();
+        const results: string[] = [];
+        const linkRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"/g;
+        let match;
+        
+        while ((match = linkRegex.exec(html)) !== null && results.length < 3) {
+          try {
+            const link = match[1];
+            const url = new URL(link, 'https://duckduckgo.com');
+            const realUrl = url.searchParams.get('uddg');
+            if (realUrl) {
+              const decodedUrl = decodeURIComponent(realUrl);
+              results.push(decodedUrl);
+              console.log(`🔗 Found URL: ${decodedUrl}`);
+            }
+          } catch (urlError) {
+            console.warn(`⚠️ Failed to parse URL: ${match[1]}`);
+          }
+        }
+        
+        console.log(`✅ Found ${results.length} URLs from DuckDuckGo`);
+        
         const urls: string[] = [];
         const urlsWithContent: any[] = [];
         
-        // Try multiple search sources
-        const searchSources = [
-          `https://www.google.com/search?q=${searchQuery}`,
-          `https://bing.com/search?q=${searchQuery}`,
-          `https://search.yahoo.com/search?p=${searchQuery}`,
-        ];
-        
-        // Fallback: use some common tech sites for common queries
-        const commonSites = [
-          `https://stackoverflow.com/search?q=${searchQuery}`,
-          `https://github.com/search?q=${searchQuery}`,
-          `https://www.w3schools.com/`,
-          `https://developer.mozilla.org/en-US/`,
-        ];
-        
-        // For now, let's use reliable tech sites
-        const targetUrls = requestBody.query.toLowerCase().includes('tech') || 
-                          requestBody.query.toLowerCase().includes('programming') ||
-                          requestBody.query.toLowerCase().includes('code') ?
-                          commonSites.slice(0, 3) : 
-                          [`https://en.wikipedia.org/wiki/${searchQuery.replace(/%20/g, '_')}`, 
-                           `https://www.britannica.com/search?query=${searchQuery}`,
-                           `https://simple.wikipedia.org/wiki/${searchQuery.replace(/%20/g, '_')}`];
-        
-        console.log(`🔍 Searching ${targetUrls.length} URLs`);
-        
-        // Fetch content for each URL
-        for (const url of targetUrls) {
+        // Fetch content for each URL found
+        for (const url of results) {
           try {
             console.log(`📄 Fetching content from: ${url}`);
             const contentResponse = await fetch(url, {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
               },
-              signal: AbortSignal.timeout(10000) // 10 second timeout
+              signal: AbortSignal.timeout(10000)
             });
             
             if (contentResponse.ok) {
