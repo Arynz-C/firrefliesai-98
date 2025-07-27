@@ -13,7 +13,7 @@ interface ChatSession {
 
 interface ChatSidebarProps {
   currentChatId?: string;
-  onNewChat: () => void;
+  onNewChat: () => Promise<void>;
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
   onEditChat: (chatId: string, newTitle: string) => void;

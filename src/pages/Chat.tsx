@@ -226,6 +226,16 @@ export const Chat = () => {
   const handleSendMessage = async (content: string, image?: File) => {
     console.log('🤖 Using model:', selectedModel);
     
+    // Prevent sending new message if already generating
+    if (isGenerating) {
+      toast({
+        title: "Please Wait",
+        description: "Please wait for the current response to complete before sending a new message.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Check if user has subscription or is on free plan
     if (!profile) {
       toast({
@@ -520,8 +530,10 @@ export const Chat = () => {
   };
 
   const handleNewChat = async () => {
+    // Allow creating new chat even if another is generating
     const newChatId = await createNewChatSession("New Chat");
     if (newChatId) {
+      setCurrentChatId(newChatId);
       setHasStartedChatting(false);
       setSidebarOpen(false);
     }
