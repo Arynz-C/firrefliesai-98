@@ -9,6 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Mail, Lock } from 'lucide-react';
 
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
+
+//import { default as jwt_decode } from "jwt-decode";
+import * as jwt_decode from "jwt-decode";
+
+
 const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -16,6 +22,7 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Sign in biasa dari supabase 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -39,7 +46,7 @@ const Auth = () => {
         });
         navigate('/chat');
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Terjadi kesalahan saat login",
@@ -50,11 +57,11 @@ const Auth = () => {
     setLoading(false);
   };
 
+  // Sign up biasa dari supabase 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Validate input
     if (!email || !password) {
       toast({
         title: "Error",
@@ -67,7 +74,7 @@ const Auth = () => {
 
     if (password.length < 6) {
       toast({
-        title: "Error", 
+        title: "Error",
         description: "Password minimal 6 karakter",
         variant: "destructive",
       });
@@ -95,7 +102,6 @@ const Auth = () => {
           title: "Berhasil!",
           description: "Akun berhasil dibuat, mengarahkan ke chat...",
         });
-        // Navigate to chat page immediately
         navigate('/chat');
       }
     } catch (error: any) {
@@ -107,6 +113,43 @@ const Auth = () => {
     }
 
     setLoading(false);
+  };
+
+  // Callback ketika login Google berhasil (Peran SDK Google Hanya di page Login) 
+  const handleGoogleLoginSuccess = (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      toast({
+        title: "Error",
+        description: "Google login gagal, token tidak ditemukan",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const user: any = jwt_decode.default(credentialResponse.credential);
+      console.log("Google user info:", user);
+
+      toast({
+        title: "Berhasil!",
+        description: `Login sebagai ${user.email}`,
+      });
+      navigate('/chat');
+    } catch {
+      toast({
+        title: "Error",
+        description: "Gagal memproses login Google",
+        variant: "destructive",
+      });
+    }
+  };
+
+
+  const handleGoogleLoginError = () => {
+    toast({
+      title: "Error",
+      description: "Login Google gagal",
+      variant: "destructive",
+    });
   };
 
   return (
@@ -126,7 +169,7 @@ const Auth = () => {
               <TabsTrigger value="signin">Masuk</TabsTrigger>
               <TabsTrigger value="signup">Daftar</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -163,8 +206,16 @@ const Auth = () => {
                   {loading ? 'Tunggu...' : 'Masuk'}
                 </Button>
               </form>
+
+              {/* Tombol Google Login di sini, Lu bisa design juga tampilan nya terserah gua mah malas */}
+              <div className="mt-4 flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleLoginSuccess}
+                  onError={handleGoogleLoginError}
+                />
+              </div>
             </TabsContent>
-            
+
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
@@ -211,3 +262,4 @@ const Auth = () => {
 };
 
 export default Auth;
+// Terserah lu mau nambahin SDK BTN di register/ Singup juga tapi lebih manusiawi hanya di Form Login aja
